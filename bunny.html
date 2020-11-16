@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html>
+
+
+<script id="vertex-shader" type="x-shader/x-vertex">
+
+attribute vec4 vPosition;
+attribute vec3 vNormal;
+
+uniform vec3 viewWorldPosition;
+uniform mat4 viewMatrix;
+uniform mat4 projectionMatrix;
+uniform mat4 uMatrix;
+uniform mat4 worldInverseTranspose;
+
+uniform vec3 pointLightWorldPosition;
+uniform vec3 spotLightWorldPosition;
+
+varying vec3 fNormal;
+varying vec3 v_surfaceToLightPoint;
+varying vec3 v_surfaceToLightSpot;
+varying vec3 surfaceToView;
+
+void
+main()
+{
+    gl_Position = projectionMatrix * viewMatrix * uMatrix * vPosition;
+
+    fNormal = mat3(worldInverseTranspose) * vNormal;
+
+    vec3 surfaceWorldPosition = (uMatrix * vPosition).xyz;
+
+    v_surfaceToLightPoint = pointLightWorldPosition - surfaceWorldPosition;
+    v_surfaceToLightSpot = spotLightWorldPosition - surfaceWorldPosition;
+
+    surfaceToView = viewWorldPosition - surfaceWorldPosition;
+}
+</script>
+
+<script id="fragment-shader" type="x-shader/x-fragment">
+
+precision mediump float;
+uniform vec4 fColor;
+uniform float spotLimit;
+uniform vec3 spotLightDirection;
+
+uniform float Ka;   // Ambient reflection coefficient
+uniform float Kd;   // Diffuse reflection coefficient
+uniform float Ks;   // Specular reflection coefficient
+uniform float shininessVal; // Shininess
+
+// Material color
+uniform vec3 ambientColor;
+uniform vec3 diffuseColor;
+uniform vec3 specularColor;
+
+varying vec3 v_surfaceToLightPoint;
+varying vec3 v_surfaceToLightSpot;
+varying vec3 fNormal;
+varying vec3 surfaceToView;
+
+void
+main()
+{
+    //n
+    vec3 normal = normalize(fNormal);
+    //l1
+    vec3 surfaceToPointLightDirection = normalize(v_surfaceToLightPoint);
+    float pointLight = max(dot(normal, surfaceToPointLightDirection), 0.0);
+    //l2
+    vec3 surfaceToSpotLightDirection = normalize(v_surfaceToLightSpot);
+    float dotFromSpotDirection = dot(surfaceToSpotLightDirection, -spotLightDirection);
+
+    float lambertianPoint = max(dot(normal, surfaceToPointLightDirection), 0.0);
+    float specularPoint = 0.0;
+
+    float lambertianSpot = max(dot(normal, surfaceToSpotLightDirection), 0.0);
+    float specularSpot = 0.0;
+
+    if(lambertianPoint > 0.0) {
+        vec3 R = reflect(-surfaceToPointLightDirection, normal);      // Reflected light vector
+        vec3 V = normalize(surfaceToView); // Vector to viewer
+        // Compute the specular term
+        float specAngle = max(dot(R, V), 0.0);
+        specularPoint = pow(specAngle, shininessVal);
+    }
+    float spotLight = 0.0;
+
+    if (dotFromSpotDirection >= spotLimit) {
+        spotLight = max(dot(normal, surfaceToSpotLightDirection), 0.0);
+        if(lambertianSpot > 0.0) {
+            vec3 R = reflect(-surfaceToSpotLightDirection, normal);      // Reflected light vector
+            vec3 V = normalize(surfaceToView); // Vector to viewer
+            // Compute the specular term
+            float specAngle = max(dot(R, V), 0.0);
+            specularSpot = pow(specAngle, shininessVal);
+        }
+    }
+    float finalLight = min(pointLight + spotLight, 1.0); 
+    gl_FragColor = vec4(Ka * ambientColor +
+                      Kd * (lambertianPoint + lambertianSpot) * diffuseColor +
+                      Ks * (specularPoint + specularSpot) * specularColor, 1.0); 
+    gl_FragColor.rgb *= finalLight;
+}
+</script>
+
+<script type="text/javascript" src="Common/webgl-utils.js"></script>
+<script type="text/javascript" src="Common/initShaders.js"></script>
+<script type="text/javascript" src="Common/MV.js"></script>
+<script type="text/javascript" src="shadingBunny.js"></script>
+<script type="text/javascript" src="bunny.js"></script>
+
+<body>
+    <div>
+        <canvas id="gl-canvas" width="900" height="900">>
+            Oops ... your browser doesn't support the HTML5 canvas element
+        </canvas>
+        <div id="textContainer" class="text">
+            <div><span id="alert"></span></div>
+        </div>
+    </div>
+</body>
+</html>
